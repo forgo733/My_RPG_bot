@@ -137,6 +137,7 @@ async def show_main_menu(message_or_cb):
 
 @dp.callback_query(F.data.startswith("select_"))
 async def select_class(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     cls_key = callback.data.split("_")[1]
     cls_data = CLASSES[cls_key]
     
@@ -155,10 +156,12 @@ async def select_class(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     await show_main_menu(callback)
 
 @dp.callback_query(F.data.startswith("startwith_"))
 async def start_game(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     cls_key = callback.data.split("_")[1]
     cls_data = CLASSES[cls_key]
     user_id = callback.from_user.id
@@ -211,6 +214,7 @@ async def render_room(message_or_cb):
 
 @dp.callback_query(F.data == "next_room")
 async def next_room(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     user_id = callback.from_user.id
     player = players.get(user_id)
     if not player: return
@@ -235,6 +239,7 @@ async def next_room(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "change_loc")
 async def change_location_menu(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     builder = InlineKeyboardBuilder()
     for loc_key, loc_data in LOCATIONS.items():
         builder.button(text=loc_data["name"], callback_data=f"setloc_{loc_key}")
@@ -245,6 +250,7 @@ async def change_location_menu(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("setloc_"))
 async def set_location(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     user_id = callback.from_user.id
     player = players.get(user_id)
     if not player: return
@@ -257,11 +263,13 @@ async def set_location(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "render_current_room")
 async def render_current_room(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     await render_room(callback)
 
 # === КНОПКА «ПРОПУСТИТЬ ХОД» (+15 МАНЫ) ===
 @dp.callback_query(F.data == "skip_turn")
 async def process_skip_turn(callback: types.CallbackQuery):
+    await callback.answer()  # Мгновенный отклик на кнопку
     user_id = callback.from_user.id
     player = players.get(user_id)
     if not player or not player["enemy"]: return
@@ -303,20 +311,25 @@ async def process_skip_turn(callback: types.CallbackQuery):
 async def use_skill(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     player = players.get(user_id)
-    if not player or not player["enemy"]: return
+    if not player or not player["enemy"]: 
+        await callback.answer()
+        return
         
     skill_id = callback.data.split("_")[1]
     cls_data = CLASSES[player["class_key"]]
     skill = cls_data["skills"][skill_id]
-    enemy = player["enemy"]
-    log = []
     
-    skip_enemy_turn = skill.get("enemy_skip_turn", False)
-    
+    # Проверка на ресурс с выплывающим плашкой-предупреждением
     if player["res"] < skill["cost"]:
         await callback.answer(f"Не хватает {cls_data['res_name']}!", show_alert=True)
         return
+        
+    await callback.answer()  # Мгновенный отклик на кнопку после успешной проверки
     player["res"] -= skill["cost"]
+    
+    enemy = player["enemy"]
+    log = []
+    skip_enemy_turn = skill.get("enemy_skip_turn", False)
     
     damage = 0
     if "dmg" in skill: damage = random.randint(*skill["dmg"])
@@ -378,7 +391,7 @@ async def use_skill(callback: types.CallbackQuery):
     player["last_log"] = "\n".join(log)
     await render_room(callback)
 
-# Фейковый веб-сервер для удовлетворения требований Render
+# Фейковый веб-сервер для поддержания работы на Render
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
