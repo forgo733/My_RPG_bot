@@ -1,14 +1,10 @@
-Вот полный рабочий код бота на aiogram 3.
-🌟 Что добавлено и обновлено:
- * Все классы разблокированы по умолчанию (Воин, Танк, Маг, Стрелок, Фембой) с их уникальными механиками.
- * Кнопка «⏳ Пропустить ход»: восстанавливает +15 Маны (или другого ресурса класса), а враг после этого наносит урон.
- * Локации и Перемещение: добавлена система комнат (Лес, Пещера, Подземелье, Замок Владыки). Можно исследовать комнатный путь, искать сундуки или вступать в бой.
- * Пауза / Главное меню: в любой момент можно вернуться в меню или сбросить забег.
 import asyncio
 import random
+import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiohttp import web
 
 # === ТОКЕН БОТА ===
 TELEGRAM_TOKEN = "8778603732:AAHGLy3BsklI6302GJUZgZiyBYyy85TutFE"
@@ -191,7 +187,6 @@ async def render_room(message_or_cb):
     builder = InlineKeyboardBuilder()
     
     if player["enemy"]:
-        # Экран Боя
         cls_data = CLASSES[player["class_key"]]
         if not player["prepared_move"]:
             for sk_id, sk in cls_data["skills"].items():
@@ -203,7 +198,6 @@ async def render_room(message_or_cb):
         builder.button(text="⏳ Пропустить ход (+15 Маны)", callback_data="skip_turn")
         builder.button(text="⏸️ Пауза / Меню", callback_data="back_to_menu")
     else:
-        # Экран Исследования
         builder.button(text="🚪 Идти в следующую комнату", callback_data="next_room")
         builder.button(text="🗺️ Сменить локацию", callback_data="change_loc")
         builder.button(text="⏸️ Пауза / Меню", callback_data="back_to_menu")
@@ -275,14 +269,12 @@ async def process_skip_turn(callback: types.CallbackQuery):
     enemy = player["enemy"]
     cls_data = CLASSES[player["class_key"]]
     
-    # 🔮 Восстановление 15 маны/ресурса
     mana_gain = 15
     player["res"] = min(player["max_res"], player["res"] + mana_gain)
     log = [f"⏳ Вы пропустили ход и восстановили +{mana_gain} {cls_data['res_name']}."]
 
-    # Ответная атака врага
     if not player["tank_blocking"]:
-        enemy_dmg = random.randint(e_dmg_min := enemy["dmg"][0], enemy["dmg"][1])
+        enemy_dmg = random.randint(enemy["dmg"][0], enemy["dmg"][1])
         if player["class_key"] == "mage":
             mana_dmg = min(player["res"], enemy_dmg)
             player["res"] -= mana_dmg
@@ -321,13 +313,11 @@ async def use_skill(callback: types.CallbackQuery):
     
     skip_enemy_turn = skill.get("enemy_skip_turn", False)
     
-    # Проверка ресурса
     if player["res"] < skill["cost"]:
         await callback.answer(f"Не хватает {cls_data['res_name']}!", show_alert=True)
         return
     player["res"] -= skill["cost"]
     
-    # Применение эффектов
     damage = 0
     if "dmg" in skill: damage = random.randint(*skill["dmg"])
     if "dmg_random" in skill: damage = random.randint(*skill["dmg_random"])
@@ -356,7 +346,6 @@ async def use_skill(callback: types.CallbackQuery):
         player["prepared_move"] = True
         log.append("🎯 Вы начали прицеливание!")
 
-    # Победа над врагом
     if enemy["hp"] <= 0:
         player["kills"] += 1
         player["enemy"] = None
@@ -364,7 +353,6 @@ async def use_skill(callback: types.CallbackQuery):
         await render_room(callback)
         return
 
-    # Ход врага
     if not player["tank_blocking"] and not skip_enemy_turn:
         enemy_dmg = random.randint(*enemy["dmg"])
         if player["class_key"] == "mage":
@@ -380,7 +368,6 @@ async def use_skill(callback: types.CallbackQuery):
         log.append("🧱 Удар врага успешно заблокирован!")
         player["tank_blocking"] = False
 
-    # Смерть игрока
     if player["hp"] <= 0:
         builder = InlineKeyboardBuilder()
         builder.button(text="🔄 Главное меню", callback_data="back_to_menu")
@@ -391,11 +378,24 @@ async def use_skill(callback: types.CallbackQuery):
     player["last_log"] = "\n".join(log)
     await render_room(callback)
 
-# Запуск
+# Фейковый веб-сервер для удовлетворения требований Render
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+# Главный запуск
 async def main():
-    print("Бот RPG успешно запущен!")
+    print("Бот RPG запущен!")
+    await start_web_server()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
